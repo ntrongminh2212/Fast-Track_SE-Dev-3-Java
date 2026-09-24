@@ -9,4 +9,9 @@ public record OrderId(String id) {
         }
         this.id = id;
     }
+
+    public String getValue() {
+        return id;
+    }
+
 }

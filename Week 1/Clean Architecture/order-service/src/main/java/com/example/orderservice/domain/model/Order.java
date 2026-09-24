@@ -28,4 +28,21 @@ public class Order {
         }
         this.status = OrderStatus.CONFIRMED;
     }
+
+    public OrderId getId() {
+        return id;
+    }
+
+    public List<OrderItem> getItems() {
+        return items;
+    }
+
+    public OrderStatus getStatus() {
+        return status;
+    }
+
+    public void setStatus(OrderStatus status) {
+        this.status = status;
+    }
+
 }
