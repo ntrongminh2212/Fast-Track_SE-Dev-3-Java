@@ -1,7 +1,5 @@
 package com.example.orderservice.domain.model;
 
-import java.util.Objects;
-
 import com.example.orderservice.domain.exception.DomainException;
 
 public record Money(double amount) {

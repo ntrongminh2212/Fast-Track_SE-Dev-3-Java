@@ -9,4 +9,6 @@ public interface OrderRepository {
     void save(Order order);
 
     Optional<Order> findById(OrderId orderId);
+
+    String nextOrderId();
 }

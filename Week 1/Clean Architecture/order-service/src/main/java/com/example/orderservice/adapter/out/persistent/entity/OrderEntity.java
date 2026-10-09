@@ -1,4 +1,4 @@
-package com.example.orderservice.adapter.out.persistent;
+package com.example.orderservice.adapter.out.persistent.entity;
 
 import java.util.List;
 

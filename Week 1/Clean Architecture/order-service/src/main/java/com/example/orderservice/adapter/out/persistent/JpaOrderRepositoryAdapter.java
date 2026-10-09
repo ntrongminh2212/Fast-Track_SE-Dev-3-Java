@@ -6,16 +6,18 @@ import java.util.stream.Collectors;
 
 import org.springframework.stereotype.Repository;
 
+import com.example.orderservice.adapter.out.persistent.entity.OrderEntity;
+import com.example.orderservice.adapter.out.persistent.entity.OrderItemEntity;
 import com.example.orderservice.application.port.out.OrderRepository;
 import com.example.orderservice.domain.model.Order;
 import com.example.orderservice.domain.model.OrderId;
 import com.example.orderservice.domain.model.OrderItem;
 
 @Repository
-public class JpaOrderRepositoryImpl implements OrderRepository {
+public class JpaOrderRepositoryAdapter implements OrderRepository {
     final private JpaOrderRepository jpaOrderRepository;
 
-    public JpaOrderRepositoryImpl(JpaOrderRepository jpaOrderRepository) {
+    public JpaOrderRepositoryAdapter(JpaOrderRepository jpaOrderRepository) {
         this.jpaOrderRepository = jpaOrderRepository;
     }
 
@@ -56,6 +58,11 @@ public class JpaOrderRepositoryImpl implements OrderRepository {
                             new OrderId(entity.getId()),
                             items);
                 });
+    }
+
+    @Override
+    public String nextOrderId() {
+        return String.valueOf(jpaOrderRepository.nextOrderId());
     }
 
 }

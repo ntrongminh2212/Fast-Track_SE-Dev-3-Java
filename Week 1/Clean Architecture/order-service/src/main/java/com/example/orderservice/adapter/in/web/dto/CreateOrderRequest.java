@@ -7,14 +7,11 @@ package com.example.orderservice.adapter.in.web.dto;
 
 import java.util.List;
 
-import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotEmpty;
 import lombok.Data;
 
 @Data
 public class CreateOrderRequest {
-    @NotBlank
-    private String orderId;
     @NotEmpty
     private List<CreateOrderItemRequest> items;
 }

@@ -6,9 +6,6 @@ import com.example.orderservice.application.exception.ApplicationException;
 
 public class OrderValidator {
     public void validate(CreateOrderCommand command) {
-        if (command.getOrderId() == null || command.getOrderId().trim().isEmpty()) {
-            throw new ApplicationException("OrderId is required");
-        }
 
         if (command.getItems() == null || command.getItems().isEmpty()) {
             throw new ApplicationException("Order must have items");

@@ -2,6 +2,8 @@ package com.example.orderservice.domain.model;
 
 import java.util.List;
 
+import com.example.orderservice.domain.exception.DomainException;
+
 public class Order {
     private final OrderId id;
     private final List<OrderItem> items;
@@ -9,7 +11,7 @@ public class Order {
 
     public Order(OrderId id, List<OrderItem> items) {
         if (items.isEmpty()) {
-            throw new IllegalArgumentException("Order must have at least one item");
+            throw new DomainException("Order must have at least one item");
         }
         this.id = id;
         this.items = items;
@@ -24,7 +26,7 @@ public class Order {
 
     public void confirm() {
         if (status != OrderStatus.PENDING) {
-            throw new IllegalStateException("Cannot confirm non-pending order");
+            throw new DomainException("Cannot confirm non-pending order");
         }
         this.status = OrderStatus.CONFIRMED;
     }

@@ -26,8 +26,9 @@ public class CreateOrderService implements CreateOrderUseCase {
         // 1. Validate
         validator.validate(command);
 
+        String nextOrderId = orderRepository.nextOrderId();
         // 2. Create domain objects
-        OrderId orderId = new OrderId(command.getOrderId());
+        OrderId orderId = new OrderId(nextOrderId);
         List<OrderItem> items;
         items = command.getItems().stream()
                 .map(itemCmd -> new OrderItem(

@@ -1,0 +1,41 @@
+id,price,product_name,stock
+P001,24.99,Wireless Mouse,120
+P002,89.5,Mechanical Keyboard,45
+P003,39.99,USB-C Hub,80
+P004,59,Bluetooth Speaker,35
+P005,49.95,Webcam HD,60
+P006,32.5,Laptop Stand,75
+P007,129.99,Noise-Cancelling Headphones,28
+P008,109,Portable SSD 1TB,40
+P009,12.99,USB-C Cable,200
+P010,27.5,Wireless Charger,90
+P011,249.99,27-Inch Monitor,18
+P012,9.99,HDMI Cable,150
+P013,34.95,Desk Lamp,55
+P014,219,Ergonomic Office Chair,12
+P015,64.5,Laptop Backpack,32
+P016,22.99,Smartphone Tripod,70
+P017,79,Microphone USB,25
+P018,19.95,Gaming Mouse Pad,100
+P019,17.5,Ethernet Adapter,85
+P020,44.99,Power Bank 20000mAh,50
+P021,29,Tablet Case,65
+P022,8.5,Screen Cleaning Kit,140
+P023,26.99,Surge Protector,48
+P024,38,External DVD Drive,22
+P025,15.99,Smartwatch Band,110
+P026,139,Drawing Tablet,16
+P027,329.99,Portable Projector,8
+P028,74.95,Wireless Earbuds,38
+P029,11.5,USB Flash Drive 64GB,175
+P030,54.99,Bluetooth Keyboard,42
+P031,31,Laptop Cooling Pad,58
+P032,23.5,Desktop Microphone Stand,33
+P033,42.99,4K HDMI Switch,27
+P034,18.99,Smart Plug,95
+P035,21.5,LED Light Strip,72
+P036,189,Document Scanner,10
+P037,28.95,Wireless Presenter,30
+P038,84.99,Monitor Arm,20
+P039,16,Compact Power Adapter,105
+P040,79.99,External Hard Drive 2TB,24
