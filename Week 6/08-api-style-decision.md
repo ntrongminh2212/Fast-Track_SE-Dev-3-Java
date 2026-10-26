@@ -1,0 +1,127 @@
+# 08. API Style Decision
+## 2.1 Tenant & Identity Service
+- **API style:** REST.
+- **Lý do:**
+  - Phục vụ login, refresh token, quản lý user, role, permission và thông tin Tenant.
+  - Các thao tác chủ yếu là request/response, không cần query linh hoạt như GraphQL.
+  - REST dễ tích hợp với Web Client và API Gateway.
+- **Security model:**
+  - Login sử dụng HTTPS.
+  - Identity Service xác thực user và cấp JWT AccessToken, RefreshToken.
+  - RefreshToken được lưu dạng hash và chỉ sử dụng một lần.
+  - API quản lý user/role yêu cầu JWT hợp lệ và permission tương ứng.
+  - API Gateway và Backend Service xác minh JWT signature, issuer, audience và expiration.
+- **Versioning/evolution:**
+  - Sử dụng URI version: `/api/v1/users`.
+  - Breaking changes tạo `/api/v2`.
+- **Observability:**
+  - Theo dõi login success/failure, refresh success/failure, HTTP latency và error rate.
+  - Không log password, JWT hoặc RefreshToken.
+- **Trade-off:**
+  - REST đơn giản, dễ tích hợp nhưng cần nhiều endpoint khi nghiệp vụ mở rộng.
+## 2.2 Employee Service
+- **API style:** REST.
+- **Lý do:**
+  - CRUD EmployeeInfo và Job là các nghiệp vụ resource-oriented.
+  - Client thường cần lấy danh sách, chi tiết, cập nhật thông tin nhân viên.
+  - REST hỗ trợ pagination, filtering và sorting.
+- **Security model:**
+  - JWT authentication.
+  - RBAC: kiểm tra permission như `EMPLOYEE_UPDATE`.
+  - Tenant isolation: mọi truy vấn phải giới hạn theo `companyCd`.
+  - Employee chỉ được xem thông tin thuộc quyền truy cập của mình.
+- **Versioning/evolution:**
+  - URI version: `/api/v1/employees`.
+  - Thêm field mới theo hướng optional.
+  - Không đổi ý nghĩa field hoặc xóa field đang được Client sử dụng.
+- **Observability:**
+  - Theo dõi request rate, latency, error rate.
+  - Theo dõi số lượng employee được tạo/cập nhật.
+  - Log các thao tác thay đổi thông tin nhạy cảm.
+- **Trade-off:**
+  - REST dễ triển khai và phù hợp CRUD.
+  - Khi Client cần tổng hợp EmployeeInfo, Job và thông tin từ nhiều Service, có thể phát sinh nhiều request.
+## 2.3 Time Management Service
+- **API style:** REST.
+- **Lý do:**
+  - Phục vụ chấm công, LeaveRequest, LeaveBalance và AbnormalCase.
+  - Các thao tác tạo, cập nhật, phê duyệt đơn nghỉ phép phù hợp với REST.
+  - Dữ liệu có thể truy vấn theo Employee và khoảng thời gian.
+- **Security model:**
+  - JWT authentication.
+  - Kiểm tra `companyCd` và permission như `LEAVE_APPROVE`.
+  - Employee chỉ tạo và xem request thuộc phạm vi của mình.
+  - HR Manager chỉ quản lý nhân viên trong Tenant được cấp quyền.
+- **Versioning/evolution:**
+  - URI version: `/api/v1/leave-requests`.
+  - Sử dụng backward-compatible changes.
+  - Thay đổi cấu trúc nghiệp vụ lớn tạo API version mới.
+- **Observability:**
+  - Theo dõi số lượng LeaveRequest được tạo, phê duyệt và từ chối.
+  - Theo dõi API latency và error rate.
+  - Alert khi quá trình đồng bộ hoặc tính toán AbnormalCase thất bại.
+- **Trade-off:**
+  - REST phù hợp nghiệp vụ quản lý thời gian.
+  - Truy vấn báo cáo tổng hợp theo tháng có thể cần API riêng hoặc xử lý bất đồng bộ nếu dữ liệu lớn.
+## 2.4 Payroll Service
+- **API style:** REST cho Client-facing API, Batch Worker cho payroll run.
+- **Lý do:**
+  - REST phục vụ xem Payslip, truy vấn PayrollRun và khởi tạo payroll.
+  - Payroll run có thể xử lý hàng trăm nghìn Employee nên không phù hợp với synchronous HTTP request.
+  - Worker xử lý từng nhóm Employee bất đồng bộ để kiểm soát tải và retry.
+- **Security model:**
+  - JWT authentication và RBAC.
+  - Kiểm tra `companyCd`, permission `SALARY_READ`, `SALARY_UPDATE`, `PAYROLL_RUN`.
+  - Chỉ HR Manager hoặc Tenant Admin có quyền phù hợp mới được khởi tạo PayrollRun.
+  - Employee chỉ xem Payslip của chính mình.
+  - Payroll Worker sử dụng service-to-service authentication, không phụ thuộc JWT của người dùng.
+  - Đảm bảo không có hai PayrollRun trùng `(companyCd, payPeriod, payrollType, runVersion)`.
+- **Versioning/evolution:**
+  - REST API sử dụng URI version `/api/v1/payroll-runs`.
+- **Observability:**
+  - Theo dõi PayrollRun duration, success/failure rate.
+  - Theo dõi số Employee đã xử lý, Payslip READY/FAILED.
+  - Theo dõi Worker queue depth, retry count, Kafka consumer lag và Outbox backlog.
+  - Sử dụng `correlationId` xuyên suốt API → PayrollRun → Worker → Kafka.
+- **Trade-off:**
+  - REST dễ sử dụng cho Client nhưng không phù hợp giữ HTTP request trong suốt quá trình tính lương.
+  - Batch tăng khả năng xử lý khối lượng lớn nhưng cần thiết kế idempotency, retry, checkpoint và recovery.
+## 2.5 Audit Service
+- **API style:** gRPC cho giao tiếp nội bộ nếu cần truy vấn đồng bộ; Kafka Consumer cho tiếp nhận Audit Event.
+- **Lý do:**
+  - Các Service phát hành event khi có thay đổi SalaryProfile, Policy, PayrollRun.
+  - Audit Service tiêu thụ event bất đồng bộ, không nên khiến business transaction phụ thuộc vào Audit Service.
+  - gRPC chỉ cần thiết nếu có nhu cầu truy vấn audit đồng bộ từ các Backend Service.
+- **Security model:**
+  - Kafka topic chỉ cho phép service được cấp quyền publish/consume.
+  - Sử dụng service-to-service authentication, chỉ cho phép các microservice nằm trong Private IP của hệ thống kết nối với nhau.
+  - Audit API chỉ cho phép role AUDITOR hoặc người có permission phù hợp.
+  - Audit data phải được giới hạn theo `companyCd`.
+  - Bảo vệ audit record khỏi sửa/xóa trái phép.
+- **Versioning/evolution:**
+  - Consumer cần xử lý event trùng lặp bằng `eventId`.
+- **Observability:**
+  - Theo dõi Kafka consumer lag, processing failure, DLQ count.
+  - Theo dõi số lượng event đã xử lý và event bị duplicate.
+- **Trade-off:**
+  - Kafka giúp Audit không ảnh hưởng trực tiếp đến business transaction.
+  - Audit có eventual consistency, dữ liệu có thể xuất hiện trễ.
+  - Cần Outbox, retry, DLQ và idempotent consumer để tránh mất hoặc xử lý trùng event.
+## 2.6 Notification Service
+- **API style:** Kafka Consumer cho nhận sự kiện
+- **Lý do:**
+  - Notification được gửi sau khi nhận `PayslipReady`.
+  - Không nên để Payroll Service gọi Notification đồng bộ và chờ gửi email hoàn tất.
+- **Security model:**
+  - Kafka topic có authentication và authorization.
+  - Service-to-service authentication cho API nội bộ.
+  - Không đưa salary hoặc thông tin nhạy cảm vào notification nếu không cần thiết.
+- **Versioning/evolution:**
+  - Event `PayslipReady` cần schema version hoặc schema registry compatibility policy.
+- **Observability:**
+  - Theo dõi Kafka consumer lag, notification processing duration.
+  - Theo dõi số notification sent/failed.
+  - Theo dõi retry count và DLQ.
+- **Trade-off:**
+  - Kafka giúp gửi notification bất đồng bộ và giảm coupling.
+  - Notification có thể bị trễ khi consumer quá tải.

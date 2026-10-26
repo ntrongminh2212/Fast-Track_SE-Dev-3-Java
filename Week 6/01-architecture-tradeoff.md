@@ -1,114 +1,150 @@
 # 01 — Architecture Trade-offs
 
-## 1. Bối cảnh và yêu cầu nghiệp vụ
+## 1. Architecture Overview
 
-Thiết kế hệ thống Payroll SaaS đa tenant với các yêu cầu:
+Sử dụng **Microservices Architecture** kết hợp Domain-Driven Design (DDD) và Event-Driven Architecture (EDA).
 
-- Hỗ trợ 50.000 tenants và 5 triệu employees.
-- HR quản lý thông tin nhân viên, nghỉ phép và lương.
-- Payroll calculation chạy bất đồng bộ (asynchronous) hàng tháng.
-- Nhân viên có thể xem payslip trong vòng 2 giây.
-- Gửi notification sau khi payslip sẵn sàng.
-- Lịch sử kiểm toán liên quan đến lương và payroll phải được lưu giữ trong 7 năm.
-- Một enterprise tenant có thể có tối đa 100.000 employees.
-- Không được tạo trùng payroll run.
-- Admin của tenant A không được phép truy cập dữ liệu của tenant B.
+Hệ thống được chia thành 6 Bounded Context nhưng triển khai thành 5 services.
 
-Mục tiêu thiết kế là đáp ứng các yêu cầu trên, đồng thời đảm bảo khả năng mở rộng, bảo mật, tính nhất quán dữ liệu và khả năng vận hành khi xảy ra sự cố.
-
-## 2. Quyết định kiến trúc tổng thể
-
-Lựa chọn kiến trúc microservice gồm 6 services có thể triển khai độc lập:
-
-1. Tenant Service
-2. Employee Service
-3. Identity Service
-4. Payroll Service
-5. Audit Service
-6. Notification Service
-
-Mỗi service chịu trách nhiệm cho một nhóm nghiệp vụ và sở hữu dữ liệu riêng. Các service giao tiếp với nhau thông qua API hoặc sự kiện bất đồng bộ.
-
-Không cho phép một service truy cập trực tiếp database của service khác.
-
-Kafka được sử dụng để truyền sự kiện, điều phối các công việc nền và tách biệt các tác vụ không cần hoàn thành đồng bộ với request của người dùng.
-
-### 2.1. Lý do lựa chọn microservice
-
-- Các domain có trách nhiệm tương đối độc lập.
-- Có thể mở rộng riêng Payroll khi khối lượng tính lương tăng.
-- Có thể mở rộng Notification khi lượng thông báo tăng.
-- Lỗi gửi thông báo không nhất thiết làm gián đoạn quá trình tính lương.
-- Có thể phân chia quyền sở hữu dữ liệu và trách nhiệm vận hành theo từng service.
-
-**Đánh đổi:**
-
-- Tăng độ phức tạp trong giao tiếp giữa các service.
-- Phát sinh chi phí triển khai, giám sát, bảo mật và vận hành.
-- Phải xử lý eventual consistency, retry, duplicate message và lỗi mạng.
-- Các thao tác trước đây có thể thực hiện trong một transaction phải được thiết kế lại bằng quy trình phân tán.
-
-Với quy mô 50.000 tenants và 5 triệu employees, microservice là một lựa chọn hợp lý nếu hệ thống có nhu cầu mở rộng độc lập và các domain thực sự cần ownership riêng. Tuy nhiên, số lượng tenant lớn tự nó không bắt buộc phải sử dụng microservice.
-
-## 3. Trách nhiệm và quyền sở hữu dữ liệu của từng service
-
-| Service | Trách nhiệm | Dữ liệu sở hữu |
+| Service | Bounded Context | Responsibilities |
 |---|---|---|
-| Tenant | Quản lý công ty, cấu hình và vòng đời tenant | Thông tin tenant, cấu hình công ty |
-| Employee | Quản lý hồ sơ nhân viên, chức vụ và nghỉ phép | Employee, job information, leave records |
-| Identity | Xác thực, quản lý tài khoản và phân quyền | Account, password hash, role, permission |
-| Payroll | Quản lý lương, tính lương, tạo payslip, phê duyệt và trạng thái thanh toán | Salary records, payroll runs, payslips, calculation results |
-| Audit | Lưu lịch sử kiểm toán và phục vụ truy vết | Audit events, actor, timestamp, change history |
-| Notification | Gửi thông báo và theo dõi kết quả gửi | Notification jobs, delivery status, retry metadata |
+| Identity Service | Identity + Tenant | Quản lý tenant, employee, user, role, permission và authentication |
+| Time Management Service | Time Management | Quản lý working time, leave request, leave balance và attendance |
+| Payroll Service | Payroll | Quản lý salary, income policy, deduction policy, payroll run và payslip |
+| Audit Service | Audit | Lưu trữ lịch sử thay đổi và audit records |
+| Notification Service | Notification | Quản lý notification template và gửi email thông báo |
 
-## 4. Chiến lược database và khả năng mở rộng
+**Deployment Decision:**
+- Identity và Tenant là hai Bounded Context riêng biệt nhưng được deploy chung trong Identity Service.
+- 4 services còn lại được deploy độc lập.
+- Payroll Worker là thành phần xử lý bất đồng bộ thuộc Payroll Service, không phải một business service riêng.
 
-### 4.1. Sharding theo companyCd
+## 2. Architecture Decisions & Trade-offs
 
-Đề xuất sử dụng `companyCd` làm shard key cho dữ liệu employee và payroll thuộc từng tenant.
+### 2.1 Microservices vs Modular Monolith
 
-Với 50.000 tenants, nếu ban đầu phân bổ khoảng 10.000 tenants trên mỗi shard thì hệ thống có khoảng 5 shards.
+**Decision:** Microservices.
 
-Tuy nhiên, đây chỉ là ước lượng ban đầu, không phải giới hạn cố định.
+**Advantages:**
+- Services có thể deploy và scale độc lập.
+- Phân chia rõ trách nhiệm và quyền sở hữu dữ liệu.
+- Một service gặp sự cố không nhất thiết làm toàn bộ hệ thống ngừng hoạt động.
 
-Số lượng employees, khối lượng tính lương, dung lượng lưu trữ và lưu lượng truy cập có thể khác nhau rất lớn giữa các tenants.
+**Trade-offs:**
+- Tăng độ phức tạp trong deployment và monitoring.
+- Cần xử lý network failure và distributed transactions.
+- Tốn thêm infrastructure và operational cost.
 
-Ví dụ:
+### 2.2 Identity + Tenant Deployment
 
-- Tenant A có 50 employees.
-- Tenant B có 500 employees.
-- Tenant C có 100.000 employees.
+**Decision:** Deploy Identity và Tenant trong cùng một service.
 
-Nếu chỉ phân bổ dựa trên số lượng tenants, một shard có thể chứa nhiều tenant nhỏ nhưng shard khác lại bị quá tải vì một tenant lớn.
+**Advantages:**
+- Giảm số lượng deployable services.
+- Đơn giản hóa việc triển khai và vận hành.
+- Thuận tiện khi các chức năng quản lý tenant và identity có liên quan chặt chẽ.
 
-Do đó, cần có cơ chế theo dõi tải và phân bổ shard linh hoạt.
+**Trade-offs:**
+- Hai Bounded Context không thể scale và deploy độc lập.
+- Cần giữ ranh giới domain rõ ràng để tránh coupling.
 
-Đối với enterprise tenant có tối đa 100.000 employees, có thể cấp shard riêng hoặc tài nguyên database riêng tùy theo mức tải và yêu cầu cách ly.
+### 2.3 Database per Service
 
-**Ưu điểm:**
+**Decision:** Mỗi service sở hữu database riêng.
 
-- Hỗ trợ mở rộng dữ liệu theo chiều ngang.
-- Giảm phạm vi ảnh hưởng khi một shard gặp sự cố.
-- Dễ định tuyến truy vấn theo tenant.
-- Có thể cô lập tài nguyên của enterprise tenant.
+**Advantages:**
+- Đảm bảo data ownership.
+- Có thể lựa chọn database strategy phù hợp với từng service.
+- Tránh coupling thông qua database schema.
 
-**Nhược điểm:**
+**Trade-offs:**
+- Không thể sử dụng database transaction xuyên nhiều services.
+- Cần xử lý data consistency thông qua API hoặc events.
+- Tăng chi phí quản lý database.
 
-- Phải quản lý shard routing và phân bổ dữ liệu.
-- Có thể xảy ra phân bố tải không đồng đều.
-- Việc chuyển tenant giữa các shards phức tạp.
-- Các truy vấn xuyên shard và báo cáo tổng hợp cần chiến lược riêng.
+### 2.4 REST vs gRPC vs Kafka
 
-Cần xây dựng cơ chế cấu hình ánh xạ `companyCd -> shard`, tránh hard-code quy tắc phân bổ shard trong business logic.
+**Decision:**
+- REST cho client-facing APIs.
+- gRPC cho internal synchronous communication khi thực sự cần.
+- Kafka cho asynchronous communication.
 
-### 4.2. Tách đọc và ghi cho Payroll
+**Advantages:**
+- REST dễ tích hợp với frontend và external clients.
+- gRPC phù hợp với synchronous service-to-service calls.
+- Kafka giúp giảm coupling và xử lý workload bất đồng bộ.
 
-Payroll sử dụng primary database để ghi dữ liệu và quản lý trạng thái tính lương. Read replica có thể được sử dụng để phục vụ truy vấn payslip.
+**Trade-offs:**
+- REST/gRPC phụ thuộc vào availability của service được gọi.
+- Kafka có eventual consistency và cần xử lý duplicate events.
+- Tăng độ phức tạp trong debugging và monitoring.
 
-Về mặt logic, mô hình này là:
+### 2.5 Asynchronous Payroll Processing
 
-- Primary: ghi salary, tạo payroll run, cập nhật trạng thái và lưu kết quả tính lương.
-- Read replica: phục vụ truy vấn payslip và lịch sử trả lương.
-- Cache: tăng tốc các truy vấn đọc phổ biến khi cần thiết.
+**Decision:** Sử dụng Payroll Worker để tính payroll bất đồng bộ.
 
-Nếu Payroll được sharding, mỗi shard có thể có primary và read replica riêng. Việc có bao nhiêu replica cần được quyết định dựa trên tải thực tế.
+**Advantages:**
+- Không giữ HTTP request trong thời gian tính payroll.
+- Có thể scale worker độc lập theo workload.
+- Có thể retry và resume các payslips thất bại.
+
+**Trade-offs:**
+- Kết quả không có ngay sau khi gửi request.
+- Cần quản lý processing status và failure recovery.
+- Cần đảm bảo không tính trùng payslip hoặc payroll run.
+
+### 2.6 Transactional Outbox + Kafka
+
+**Decision:** Sử dụng Transactional Outbox để publish events.
+
+**Advantages:**
+- Tránh mất event khi business transaction đã commit nhưng Kafka publish thất bại.
+- Business data và Outbox record được lưu trong cùng transaction.
+
+**Trade-offs:**
+- Cần Outbox Relay để publish events.
+- Có thể publish duplicate events.
+- Consumer phải implement idempotency.
+- Cần monitoring và cleanup Outbox records.
+
+### 2.7 Redis Distributed Cache
+
+**Decision:** Sử dụng Redis Cluster làm shared caching infrastructure.
+
+**Advantages:**
+- Giảm database load.
+- Cải thiện read latency.
+- Có thể chia sẻ caching infrastructure giữa các services.
+
+**Trade-offs:**
+- Cần xử lý cache invalidation.
+- Có nguy cơ stale data.
+- Redis trở thành shared infrastructure cần được monitoring và bảo vệ.
+- Mỗi service cần quản lý namespace và quyền truy cập riêng.
+
+### 2.8 Database Sharding
+
+**Decision:** Shard dữ liệu theo `companyCd`, cân nhắc shard riêng cho enterprise tenant.
+
+**Advantages:**
+- Phân tán dữ liệu và workload giữa nhiều database instances.
+- Hạn chế ảnh hưởng giữa các tenants lớn và nhỏ.
+- Có thể scale database theo nhu cầu.
+
+**Trade-offs:**
+- Tăng độ phức tạp trong routing và migration dữ liệu.
+- Cross-shard queries khó thực hiện.
+- Cần cân nhắc phân bổ và rebalance shards.
+
+## 3. Summary
+
+| Decision | Main Benefit | Main Trade-off |
+|---|---|---|
+| Microservices | Independent deployment and scaling | Operational complexity |
+| Identity + Tenant | Fewer deployable services | Cannot scale independently |
+| Database per Service | Data ownership | Distributed consistency |
+| REST/gRPC/Kafka | Flexible communication | Multiple communication patterns |
+| Async Payroll | Scalable processing | Eventual completion and recovery |
+| Transactional Outbox | Reliable event publishing | Duplicate handling and relay |
+| Redis Cluster | Faster reads | Cache invalidation and stale data |
+| Database Sharding | Database scalability | Routing and migration complexity |

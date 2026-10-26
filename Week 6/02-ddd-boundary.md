@@ -1,3 +1,5 @@
+# 02 — DDD Boundary
+
 ## 1. Time Management Context: 
 ### 1.1. Bounded Context: 
 - WorkingTime: employeeCd, startDateTime, endDateTime. 
@@ -34,6 +36,7 @@
 - HR manager phải confirm/reject đơn nghỉ phép trước ngày 1 của tháng kế tiếp, trường hợp đơn nghỉ được confirm hệ thống sẽ xóa AbnormalCase của buổi/ngày tướng ứng cho nhân viên 
 ## 2. Payroll Context: 
 ### 2.1. Bounded Context: 
+- BankAccount: bankAccountNumber, employeeCd, bankName, bankBranch, bankCode.
 - SalaryProfile: salaryProfileId, employeeCd, companyCd, baseSalary, effectiveFrom, effectiveTo 
 - DeductionPolicy: deductionCd, calculationType (FIXED_AMOUNT, PERCENTAGE), calculationValue 
  + PersonalIncomeTaxPolicy: calculationType phần trăm tính lũy tiến theo lương cơ bản theo luật lao động 
@@ -44,8 +47,8 @@
 - IncomePolicy: incomeCd, calculationType (FIXED_AMOUNT, PERCENTAGE), calculationValue, effectiveFrom, effectiveTo 
 - DeductionPoliciesApply: payslipId, deductionCd, calculationBase, calculationType, calculationValueApplied, deductionAmount 
 - IncomePoliciesApply: payslipId, incomeCd, calculationBase, calculationType, calculationValueApplied, incomeAmount 
-- Payslip: payslipId, salaryProfileId, payrollRunId, payPeriod, deductionPoliciesApply, incomePoliciesApply, tmsViolationPenalty, run, totalDeduction, totalIncome, netSalary, grossSalary, runStatus 
-- PayrollRun: payrollRunId, companyCd, payPeriod, totalEmployees, runDateTime, successCount, failureCount, runStatus 
+- Payslip: payslipId, salaryProfileId, payrollRunId, payPeriod, deductionPoliciesApply, incomePoliciesApply, tmsViolationPenalty, run, totalDeduction, totalIncome, netSalary, grossSalary, paymentBankAccount, payslipStatus 
+- PayrollRun: payrollRunId, companyCd, payPeriod, totalEmployees, startDateTime, endDateTime, successCount, failureCount, runStatus 
 ### 2.2 Ubiquitous Language 
 | Thuật ngữ | Ý nghĩa | 
 |-----------|---------| 
@@ -58,12 +61,14 @@
 | Payslip | Lương sẽ nhận của nhân viên trong một lần chạy (theo tháng) đã áp dụng các khoản income policy và deduction policy | 
 | PayrollRun | Một lần chạy tính lương của một công ty trong một kỳ hạn (tháng) cho nhiều nhân viên | 
 | runStatus | Kết quả chạy payroll lần này COMPLETED, COMPLETED_WITH_ERROR, FAILED | 
+| payslipStatus | Trạng thái tính toán payslip|
 | baseSalary | Lương cơ bản của nhân viên | 
 | incomeAmount | Kết quả income thưởng thêm cho nhân viên sau khi apply policy này | 
 | deductionAmount | Kết quả deduction khấu trừ vào lương nhân viên sau khi apply policy này | 
 | calculationType | Xác định khi apply Income hoặc Deduction Policy này sẽ được tính theo phần trăm hay fix cứng | 
 | netSalary | Số tiền thực lãnh của nhân viên trong lần chạy này sau khi lấy baseSalary trừ đi các khoản DeductionPoliciesApply và cộng các khoản IncomePoliciesApply | 
 | grossSalary | Số tiền chưa tính các khoản thuế phí | 
+| paymentBankAccount | Thông tin tài khoản ngân hàng để trả lương cho nhân viên|
 ### 2.3 Angregate Root and Invariant 
 #### Angregate Root: PayrollRun 
 - companyCd phải xác minh có tồn tại từ Tennant Context 
@@ -91,11 +96,12 @@
 ### 3.1. Bounded Context: 
 - EmployeeInfo: employeeCd, name, dateOfBirth, phoneNumber, nationalId, homeAddress, employmentStatus, joinDate, jobId, companyCd 
 - Job: jobId, jobName, jobRank 
-- User: userId, employeeCd, email, passwordHash, status 
+- User: userId, employeeCd, email, passwordHash, failedLoginCount, isLock, status 
 - UserTenantRole: userId, companyCd, roleCd 
 - Role: roleCd, roleName, description 
 - RolePermission: roleCd, permissionCd 
 - Permission: permissionCd, description 
+- RefreshToken: tokenId, userId, clientId, expiresAt
 ### 3.2. Ubiquitous Language: 
 | Thuật ngữ | Ý nghĩa | 
 |-----------|---------| 
@@ -104,7 +110,9 @@
 | User | Thông tin tài khoản đăng nhập của nhân viên | 
 | Role | Vai trò của một nhân viên là gì: EMPLOYEE, HR_MANAGER, AUDITOR, TENANT_ADMIN| 
 | Permission | Các hành động cần cấp phép cho role làm trong hệ thống: EMPLOYEE_UPDATE, LEAVE_APPROVE, SALARY_READ, SALARY_UPDATE, PAYROLL_RUN| 
+| failedLoginCount | Số lần đăng nhập thất bại do sai mật khẩu |
 | RolePermission | Thể hiện các permission được cấp cho phép role làm  | 
+| RefreshToken | Dùng để cấp lại JWT mới cho client |
 ### 3.3 Angregate Root and Invariant 
 #### Angregate Root: EmployeeInfo 
 - Một nhân viên phải có duy nhất 1 Job. 
@@ -113,9 +121,25 @@
 - email của user phải là duy nhất 
 - User phải có status active mới được đăng nhập và request tới hệ thống 
 - Khi đăng nhập sẽ dùng email và password 
+- Mỗi lần đăng nhập sai failedLoginCount + 1
+- Nếu đăng nhập sai quá 6 lần thì sẽ thực hiện lock account isLock = true.
+- Nếu đăng nhập thành công sẽ cấp JWT và refreshToken cho client
+- password của user phải lưu dưới dạng bCrypt
+- User chỉ được thực hiện request với tenant tương ứng và phải có Permission tương ứng 
+#### Angregate Root: Role 
 - roleCd phải là duy nhất 
 - Role chỉ được chứa các permission hợp lệ 
-- User chỉ được thực hiện request với tenant tương ứng và phải có Permission tương ứng 
+#### Aggregate Root: RefreshToken
+- tokenId phải duy nhất.
+- RefreshToken phải thuộc về một User hợp lệ.
+- RefreshToken phải được lưu dưới dạng hash.
+- RefreshToken chỉ được sử dụng khi:
+  - Chưa hết hạn (expiresAt)
+  - User vẫn ACTIVE.
+- Mỗi RefreshToken chỉ được sử dụng một lần.
+- Khi RefreshToken được sử dụng thành công để refresh, xóa RefreshToken cũ và cấp RefreshToken mới.
+- Khi User logout, hệ thống xóa RefreshToken tương ứng với user.
+- Khi User bị khóa hoặc đổi mật khẩu, hệ thống xóa toàn bộ RefreshToken của User.
 ## 4. Audit Context: 
 ### 4.1. Bounded Context: 
 - AuditEvent: auditEventId, companyCd, actorId, action, resourceObject, resourceField, timestamp, valueBefore, valueAfter 

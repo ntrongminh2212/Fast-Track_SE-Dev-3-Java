@@ -112,7 +112,7 @@ Nếu peak traffic gấp 10 lần trung bình thì cần phục vụ khoảng 17
 | Audit Service | Lưu audit events |
 | Kafka | Event broker giữa các context |
 | Transactional Outbox | Lưu event cùng transaction với dữ liệu nghiệp vụ |
-| Outbox Publisher | Publish event từ Outbox lên Kafka |
+| RelayPublisher | Publish event từ Outbox lên Kafka |
 | Redis | Cache dữ liệu đọc thường xuyên nếu cần |
 | Database | Persistent storage cho từng context |
 | External Email Provider | Gửi email |
@@ -131,7 +131,7 @@ Nếu peak traffic gấp 10 lần trung bình thì cần phục vụ khoảng 17
 2. Identity kiểm tra authentication, tenant scope và permission.
 3. Payroll kiểm tra dữ liệu và effective date.
 4. Cập nhật SalaryProfile và insert event vào Outbox trong cùng transaction.
-5. Outbox Publisher publish `SalaryProfileChanged` lên Kafka.
+5. RelayPublisher publish `SalaryProfileChanged` lên Kafka.
 6. Audit Consumer nhận event và lưu AuditEvent.
 ### 5.3. Monthly payroll
 1. HR Manager gửi `RunPayroll`.
@@ -141,7 +141,7 @@ Nếu peak traffic gấp 10 lần trung bình thì cần phục vụ khoảng 17
 6. Lấy SalaryProfile, IncomePolicy, DeductionPolicy và dữ liệu AbnormalCase phù hợp kỳ lương.
 7. Tính toán và lưu Payslip.
 8. Khi Payslip được lưu thành công, insert `PayslipReady` vào Outbox.
-9. Outbox Publisher gửi event lên Kafka.
+9. RelayPublisher gửi event lên Kafka.
 10. Notification Consumer tạo Notification và gửi email.
 11. Employee truy cập API để đọc payslip đã hoàn thành.
 ### 5.4. View payslip
@@ -153,7 +153,7 @@ Nếu peak traffic gấp 10 lần trung bình thì cần phục vụ khoảng 17
 ### 5.5. Audit flow
 1. Các context phát sinh business event.
 2. Event được lưu vào Outbox cùng transaction nghiệp vụ.
-3. Outbox Publisher publish lên Kafka.
+3. RelayPublisher publish lên Kafka.
 4. Audit Consumer kiểm tra `eventId` để tránh duplicate.
 5. Lưu AuditEvent vào Audit Database.
 ## 6. Failure Scenarios & Observability

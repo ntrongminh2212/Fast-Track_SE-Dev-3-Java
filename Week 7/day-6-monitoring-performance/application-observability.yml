@@ -1,0 +1,28 @@
+# Mẫu tham khảo dựa trên cấu hình Order Service hiện tại.
+# Đã có Actuator, Prometheus registry, histogram HTTP và application tag.
+# Cấu hình dưới đây có thể áp dụng bằng cách hợp nhất vào application.yml;
+# không thay thế file cấu hình đang chạy.
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus,circuitbreakers
+  endpoint:
+    health:
+      show-details: never
+      probes:
+        enabled: true
+  metrics:
+    tags:
+      application: ${spring.application.name:order-service}
+      environment: ${APP_ENV:local}
+      version: ${APP_VERSION:dev}
+    distribution:
+      percentiles-histogram:
+        http.server.requests: true
+
+# Lưu ý:
+# - Chỉ bật endpoint cần thiết; bảo vệ endpoint quản trị theo môi trường.
+# - Tracing phân tán chưa được cấu hình trong project; cần thêm Micrometer Tracing,
+#   exporter và backend phù hợp trước khi dùng trace sampling/exemplars.
+# - Metric business tùy chỉnh cần được instrument trong mã nghiệp vụ.
